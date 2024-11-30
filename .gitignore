@@ -18,3 +18,7 @@ npm-debug.log*
 
 # Storage
 my_storage/
+
+# Cache
+frontend/.next/cache/webpack/server-production/
+frontend/.next/cache/webpack/client-production/*
