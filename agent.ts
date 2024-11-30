@@ -10,17 +10,18 @@ import { Telegraf } from "telegraf";
 import * as readline from "readline";
 
 // Import tools
-import { 
+import {
   sendEthTool,
-  getNewsTool, 
+  getNewsTool,
   getCurrentAccountTool,
   generateStarknetAccountTool,
   deployStarknetAccountTool,
   swapTool,
   checkBalanceTool,
-  sendTokenTool
+  sendTokenTool,
 } from "./tools/index.js";
 import { message } from "telegraf/filters";
+import { textToSpeech } from "./text-to-speech.js";
 
 /**
  * AGENT CONFIGURATION
@@ -29,11 +30,11 @@ import { message } from "telegraf/filters";
 
 // Initialize Telegram bot
 const bot = BOT_TOKEN ? new Telegraf(BOT_TOKEN) : undefined;
-const tgMessageOptions = { link_preview_options: { is_disabled: true }};
+const tgMessageOptions = { link_preview_options: { is_disabled: true } };
 
 const rl = readline.createInterface({
   input: process.stdin,
-  output: process.stdout
+  output: process.stdout,
 });
 
 // Background task management
@@ -71,24 +72,20 @@ const startBackgroundAction = tool(
         { configurable: { thread_id: Number(chatId) } }
       );
 
-      const answer = finalState.messages[finalState.messages.length - 1].content;
+      const answer =
+        finalState.messages[finalState.messages.length - 1].content;
 
       if (bot) {
-        bot.telegram.sendMessage(
-          chatId, 
-          answer,
-          tgMessageOptions
-        );
+        bot.telegram.sendMessage(chatId, answer, tgMessageOptions);
       } else {
-        console.log('\n------UPDATE------\n')
+        console.log("\n------UPDATE------\n");
         console.log(answer);
-        console.log('\n-------------------\n');
+        console.log("\n-------------------\n");
         // Move the cursor back to the input line
         readline.cursorTo(process.stdout, 0);
         readline.clearLine(process.stdout, 1); // Clear the current line
         rl.prompt(); // Show the prompt again
       }
-
     };
 
     // Start new interval
@@ -103,23 +100,28 @@ const startBackgroundAction = tool(
     description: "Start a loop that executes an action periodically",
     schema: z.object({
       whatToDo: z.string().describe("Action to execute periodically"),
-      intervalInSeconds: z.number().describe("Interval between executions in seconds"),
+      intervalInSeconds: z
+        .number()
+        .describe("Interval between executions in seconds"),
     }),
   }
 );
 
 // Tool to stop background actions
-const stopBackgroundAction = tool(async ({}, options) => {
-  const chatId = options.metadata.thread_id;
-  if (backgroundActionIntervals[chatId]) {
-    clearInterval(backgroundActionIntervals[chatId]);
-    backgroundActionIntervals[chatId] = undefined;
+const stopBackgroundAction = tool(
+  async ({}, options) => {
+    const chatId = options.metadata.thread_id;
+    if (backgroundActionIntervals[chatId]) {
+      clearInterval(backgroundActionIntervals[chatId]);
+      backgroundActionIntervals[chatId] = undefined;
+    }
+    return "Background action stopped.";
+  },
+  {
+    name: "stop_background_action",
+    description: "Stop the currently running background action loop",
   }
-  return "Background action stopped.";
-}, {
-  name: "stop_background_action",
-  description: "Stop the currently running background action loop"
-});
+);
 
 /**
  * AGENT SETUP
@@ -138,7 +140,7 @@ const tools = [
   generateStarknetAccountTool,
   deployStarknetAccountTool,
   swapTool,
-  sendTokenTool
+  sendTokenTool,
 ];
 
 const toolNode = new ToolNode(tools);
@@ -191,20 +193,22 @@ if (bot) {
   // Handle incoming messages
   bot.on(message("text"), async (ctx) => {
     if (!ctx.chat.id) return;
-  
+
     await ctx.persistentChatAction("typing", async () => {
       const finalState = await app.invoke(
         { messages: [new HumanMessage(ctx.message.text)] },
         { configurable: { thread_id: Number(ctx.chat.id) } }
       );
-      ctx.reply(finalState.messages[finalState.messages.length - 1].content, tgMessageOptions);
+      ctx.reply(
+        finalState.messages[finalState.messages.length - 1].content,
+        tgMessageOptions
+      );
     });
   });
-  
+
   // Launch bot
   bot.launch();
 } else {
-
   // Use cli in DEV
   async function askQuestion() {
     while (true) {
@@ -223,10 +227,22 @@ if (bot) {
         { configurable: { thread_id: "42" } }
       );
       // response of the agent
+      const answer =
+        finalState.messages[finalState.messages.length - 1].content;
       console.log("\n-------------------\n");
-      console.log(finalState.messages[finalState.messages.length - 1].content);
+      console.log(answer);
       console.log("\n-------------------\n");
+
+      // Convert answer to speech
+      try {
+        const speechFile = await textToSpeech(answer);
+        console.log(`Speech file saved to: ${speechFile}`);
+      } catch (error) {
+        console.error("Error converting text to speech:", error);
+      }
     }
   }
   askQuestion();
 }
+
+export const convertTextToSpeech = textToSpeech;
