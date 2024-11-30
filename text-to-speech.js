@@ -11,7 +11,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-export async function textToSpeech(text, outputPath = "./speech.mp3", voice = "alloy") {
+export async function textToSpeech(text, outputPath, voice = "alloy") {
   try {
     const speechFile = path.resolve(outputPath);
 
@@ -32,15 +32,4 @@ export async function textToSpeech(text, outputPath = "./speech.mp3", voice = "a
     console.error("Error:", error);
     throw error;
   }
-}
-
-// Optional: Keep the main function for testing
-export async function main() {
-  const response = "This is a test of the text-to-speech system.";
-  await textToSpeech(response);
-}
-
-// Only run main if this file is being run directly
-if (import.meta.url === new URL(import.meta.url).href) {
-  main();
 }
