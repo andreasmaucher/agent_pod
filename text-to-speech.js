@@ -11,14 +11,14 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-export async function textToSpeech(text, outputPath = "./speech.mp3") {
+export async function textToSpeech(text, outputPath = "./speech.mp3", voice = "alloy") {
   try {
     const speechFile = path.resolve(outputPath);
 
     // Convert the text to speech
     const mp3 = await openai.audio.speech.create({
       model: "tts-1",
-      voice: "alloy",
+      voice: voice,
       input: text,
     });
 
@@ -44,4 +44,3 @@ export async function main() {
 if (import.meta.url === new URL(import.meta.url).href) {
   main();
 }
-
