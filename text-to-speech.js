@@ -11,39 +11,37 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-const speechFile = path.resolve("./speech.mp3");
-
-async function main() {
+export async function textToSpeech(text, outputPath = "./speech.mp3") {
   try {
-    // First, get response from ChatGPT
-    const chatCompletion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "user",
-          content: "Tell me an interesting fact about space."
-        }
-      ],
-    });
+    const speechFile = path.resolve(outputPath);
 
-    // Get the bot's response
-    const botResponse = chatCompletion.choices[0].message.content;
-    console.log("Bot's response:", botResponse);
-
-    // Convert the response to speech
+    // Convert the text to speech
     const mp3 = await openai.audio.speech.create({
       model: "tts-1",
       voice: "alloy",
-      input: botResponse,
+      input: text,
     });
 
     console.log("Saving to:", speechFile);
     const buffer = Buffer.from(await mp3.arrayBuffer());
     await fs.promises.writeFile(speechFile, buffer);
     console.log("Audio file created successfully!");
+    
+    return speechFile;
   } catch (error) {
     console.error("Error:", error);
+    throw error;
   }
 }
 
-main();
+// Optional: Keep the main function for testing
+export async function main() {
+  const response = "This is a test of the text-to-speech system.";
+  await textToSpeech(response);
+}
+
+// Only run main if this file is being run directly
+if (import.meta.url === new URL(import.meta.url).href) {
+  main();
+}
+
