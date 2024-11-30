@@ -1,0 +1,1 @@
+{"version":1,"contracts":[{"id":"aod6fsf5erf66","package_name":"freysa_contracts","contract_name":"HelloStarknet","module_path":"freysa_contracts::HelloStarknet","artifacts":{"sierra":"freysa_contracts_integrationtest_HelloStarknet.test.contract_class.json","casm":null}}]}
