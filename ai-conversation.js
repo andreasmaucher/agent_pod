@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import dotenv from "dotenv";
 import { recordVoice } from "./voice-recorder.js";
 import { textToSpeech } from "./text-to-speech.js";
+import { SYSTEM_PROMPTS } from "./ai_personas/prompts.js";
 
 dotenv.config();
 
