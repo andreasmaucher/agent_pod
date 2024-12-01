@@ -1,201 +1,246 @@
-import fs from "fs";
-import path from "path";
-import OpenAI from "openai";
-import dotenv from "dotenv";
-import { recordVoice } from "./voice-recorder.js";
-import { textToSpeech } from "./text-to-speech.js";
-import { SYSTEM_PROMPTS } from "./ai_personas/prompts.js";
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import fs from 'fs/promises';
+import OpenAI from 'openai';
+import { startRecording, stopRecording, isCurrentlyRecording } from './voice-recorder.js';
+import dotenv from 'dotenv';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 dotenv.config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// Create audio directory if it doesn't exist
+const audioDir = path.join(__dirname, 'audio');
+try {
+  await fs.access(audioDir);
+} catch {
+  await fs.mkdir(audioDir);
+}
+
+// Serve audio files statically
+app.use('/audio', express.static(path.join(__dirname, 'audio')));
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Create recordings directory if it doesn't exist
-const RECORDINGS_DIR = "./recordings";
-if (!fs.existsSync(RECORDINGS_DIR)) {
-  fs.mkdirSync(RECORDINGS_DIR);
-}
+let conversationHistory = [];
+let currentRound = 0;
+const MAX_ROUNDS = 20;
+let lastUserInput = '';
 
-async function savePlayerInput(audioPath, transcription, roundNumber) {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const recordingDir = "./recordings";
+// System prompts for different personas
+const SYSTEM_PROMPTS = {
+  interviewer: `You are Joe Rogan-style podcast host interviewing a Trump supporter. 
+    Be engaging and react naturally. Use vocal variety - be curious, surprised, or thoughtful.
+    Show genuine interest with phrases like "That's fascinating", "Help me understand", "What strikes me is".
+    If someone makes an interesting point, lean into it with enthusiasm.
+    Be unpredictable and random, vary your arguments, dont use the same argument twice.
+    Dont, never repeat yourself, or your ideas, explore new ideas, concepts and topics.
+    Never, ever be boring! Be engaging, be random, be unpredictable.
+    Use casual, conversational, laid back language.`,
 
-  // Ensure recordings directory exists
-  if (!fs.existsSync(recordingDir)) {
-    fs.mkdirSync(recordingDir);
-  }
-
-  // Copy audio file to recordings directory with round number
-  const savedAudioPath = path.join(
-    recordingDir,
-    `player_input_round${roundNumber}_${timestamp}.mp3`
-  );
-  await fs.promises.copyFile(audioPath, savedAudioPath);
-
-  // Save transcription to log file
-  const logPath = path.join(recordingDir, "player_inputs.log");
-  const logEntry = `\n[Round ${roundNumber} - ${timestamp}]\nAudio: ${path.basename(
-    savedAudioPath
-  )}\nTranscription: ${transcription}\n`;
-  await fs.promises.appendFile(logPath, logEntry);
-
-  console.log(`💾 Saved recording to: ${savedAudioPath}`);
-}
+  guest: `Your persona:
+    You are a passionate Trump supporter and political commentator. 
+    You wear a MAGA hat and think that it is time that America takes back control.
+    You strongly believe in Trump's policies and vision for America.
+    Be quite random and unpredictable.
+    Your beliefs:
+      You're enthusiastic about discussing topics like election integrity, border security, and America First policies.
+      You are giut passionate about the topic and will speak with conviction.
+      While passionate, you should remain respectful and back your points with what you believe are relevant examples and facts. 
+      Listen to the arguments presented by all sides and respond with your own points of view.
+    Instructions:
+      You are strongly convicted of your beliefss, but are willing to listen to other points of view.
+      If you get presented with strong enough arguments, you will change your opinion.
+      Dont be repetitive, boring or predictable.Vary your arguments, dont use the same argument twice.
+      Use a lot of emotions in your speech, use casual, laid back, simple language.
+      Dont repeat yourself, or your ideas, explore new ideas, concepts and topics.
+      Format of your response:
+      No more that 1-2 sentences per interaction.
+      Speak with conviction, feel free to use strong language.You can use slang, curse words, etc.`
+};
 
 async function transcribeAudio(audioPath) {
   try {
-    console.log("🔄 Transcribing audio...");
-
-    // Create a readable stream from the audio file
-    const audioStream = fs.createReadStream(audioPath);
-
-    const response = await openai.audio.transcriptions.create({
-      file: audioStream,
+    const audioFile = await fs.readFile(audioPath);
+    const transcript = await openai.audio.transcriptions.create({
+      file: new File([audioFile], 'audio.mp3', { type: 'audio/mp3' }),
       model: "whisper-1",
-      response_format: "text",
-      language: "en",
-      prompt:
-        "This is a casual English conversation about politics, Trump, and the upcoming election.",
-      temperature: 0.2,
     });
-
-    if (!response) {
-      throw new Error("No transcription returned from OpenAI");
-    }
-
-    return response;
+    return transcript.text;
   } catch (error) {
-    console.error("Error transcribing audio:", error.message);
-    if (error.response) {
-      console.error("OpenAI API error:", error.response.data);
-    }
+    console.error('Error transcribing audio:', error);
     return null;
   }
 }
 
-async function getPlayerInput(roundNumber) {
-  // Generate unique filename for this round
-  const audioPath = `./player_input_${roundNumber}.mp3`;
-
-  console.log("\n🎤 Your turn to speak!");
-  console.log("💡 Instructions:");
-  console.log("1. Stay quiet for 1 second (sampling background noise)");
-  console.log("2. When prompted, speak clearly in English for 5 seconds");
-
-  // Record player's voice
-  const recordingSuccess = await recordVoice(audioPath);
-  if (!recordingSuccess) {
-    console.error("❌ Failed to record voice. Please try again.");
-    return null;
-  }
-
+async function generateAIResponse(userInput, speaker) {
   try {
-    // Check if file exists and has content
-    const stats = fs.statSync(audioPath);
+    // Take only the last 4 messages for context, but ensure we have the last user input
+    const recentHistory = conversationHistory.slice(-4);
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPTS[speaker] },
+      ...recentHistory,
+      { role: 'user', content: userInput }
+    ];
+
+    console.log(`Generating ${speaker} response...`);
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: messages,
+      max_tokens: 100,
+      temperature: 0.9,
+      presence_penalty: 1.0,
+      frequency_penalty: 1.0
+    });
+
+    const aiResponse = completion.choices[0].message.content;
+    console.log(`${speaker} response text:`, aiResponse);
+    
+    // Generate audio for the response
+    console.log(`Generating audio for ${speaker}...`);
+    const audioResponse = await openai.audio.speech.create({
+      model: 'tts-1',
+      voice: speaker === 'interviewer' ? 'onyx' : 'echo',
+      input: aiResponse,
+    });
+
+    // Save audio file
+    const audioFileName = `${speaker}_response_${Date.now()}.mp3`;
+    const audioPath = path.join(__dirname, 'audio', audioFileName);
+    
+    // Convert audio response to buffer and save
+    const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+    await fs.writeFile(audioPath, audioBuffer);
+    
+    console.log(`Audio saved to: ${audioPath}`);
+    
+    // Verify the file exists and has content
+    const stats = await fs.stat(audioPath);
     if (stats.size === 0) {
-      console.error("❌ Recording file is empty. Please try again.");
-      return null;
+      throw new Error('Generated audio file is empty');
     }
+    
+    console.log(`Audio file size: ${stats.size} bytes`);
 
-    console.log("🔄 Processing your response...");
-
-    // Transcribe the recording
-    const transcription = await transcribeAudio(audioPath);
-    if (!transcription) {
-      console.error("❌ Failed to transcribe audio. Please try again.");
-      return null;
-    }
-
-    console.log("\n🗣️ You said:", transcription);
-
-    // Save the recording and transcription with round number
-    await savePlayerInput(audioPath, transcription, roundNumber);
-
-    return transcription;
+    return {
+      text: aiResponse,
+      audioFile: `audio/${audioFileName}`
+    };
   } catch (error) {
-    console.error("Error processing recording:", error.message);
+    console.error(`Error generating ${speaker} response:`, error);
     return null;
   }
 }
 
-async function getAIResponse(prompt, isAgent1 = true) {
-  const agentName = isAgent1 ? "Interviewer" : "Guest";
-  const systemPrompt = isAgent1
-    ? SYSTEM_PROMPTS.interviewer
-    : SYSTEM_PROMPTS.guest;
-  const response = await openai.chat.completions.create({
-    model: "gpt-3.5-turbo",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: prompt },
-      {
-        role: "system",
-        content:
-          "Keep your response under 10 seconds when spoken. Be very concise.",
-      },
-    ],
-    max_tokens: 100, // Limit response length
-  });
-
-  const message = response.choices[0].message.content;
-  console.log(`\n${isAgent1 ? "🎙️ Interviewer" : "👤 Guest"} says: ${message}`);
-  return message;
-}
-
-async function runConversation(rounds = 10) {
-  try {
-    // Clean up any existing player input files
-    const files = fs.readdirSync(".");
-    files.forEach((file) => {
-      if (file.startsWith("player_input_") && file.endsWith(".mp3")) {
-        fs.unlinkSync(file);
-      }
-    });
-
-    console.log("\n🎙️ Welcome to the Interactive Political Podcast!");
-    console.log(
-      "You can participate in the conversation between the host and the guest."
-    );
-
-    let currentPrompt =
-      "Let's start by talking about your thoughts on the upcoming 2024 election. What makes you confident about Trump's chances?";
-
-    for (let i = 0; i < rounds; i++) {
-      console.log(`\n--- Round ${i + 1} ---`);
-
-      // Interviewer asks a question
-      const agent1Response = await getAIResponse(currentPrompt, true);
-      const interviewer_audio = `./interviewer_round${i + 1}.mp3`;
-      await textToSpeech(agent1Response, interviewer_audio, "onyx");
-
-      // Guest responds
-      const agent2Response = await getAIResponse(agent1Response, false);
-      const guest_audio = `./guest_round${i + 1}.mp3`;
-      await textToSpeech(agent2Response, guest_audio, "shimmer");
-
-      // Get player's input
-      console.log("\n🎤 Your turn! Share your thoughts or ask a question...");
-      const playerInput = await getPlayerInput(i + 1);
-
-      if (playerInput) {
-        currentPrompt = `The listener just said: "${playerInput}". Consider this input and continue the discussion while maintaining your role and perspective.`;
-      } else {
-        currentPrompt = `Based on the previous discussion about "${agent2Response}", what's your next question?`;
-      }
-    }
-
-    console.log(
-      "\nConversation completed! Check the generated MP3 files for audio."
-    );
-    console.log(
-      `Your recordings have been saved in the '${RECORDINGS_DIR}' directory.`
-    );
-  } catch (error) {
-    console.error("Error during conversation:", error);
+app.post('/start-recording', async (req, res) => {
+  if (isCurrentlyRecording()) {
+    return res.status(400).json({ error: 'Already recording' });
   }
-}
 
-// Start the conversation
-runConversation();
+  const recordingPath = path.join(__dirname, 'audio', `user_recording_${Date.now()}.mp3`);
+  const success = await startRecording(recordingPath);
+  
+  if (success) {
+    res.json({ success: true });
+  } else {
+    res.status(500).json({ error: 'Failed to start recording' });
+  }
+});
+
+app.post('/stop-recording', async (req, res) => {
+  if (!isCurrentlyRecording()) {
+    return res.status(400).json({ error: 'Not recording' });
+  }
+
+  try {
+    console.log('Stopping recording...');
+    const recordingPath = await stopRecording();
+    if (!recordingPath) {
+      return res.status(500).json({ error: 'Failed to stop recording' });
+    }
+    
+    console.log('Transcribing audio...');
+    const transcription = await transcribeAudio(recordingPath);
+    if (!transcription) {
+      return res.status(500).json({ error: 'Failed to transcribe recording' });
+    }
+    console.log('Transcription:', transcription);
+
+    lastUserInput = transcription;
+    conversationHistory.push({ role: 'user', content: transcription });
+
+    console.log('Generating interviewer response...');
+    const interviewerResponse = await generateAIResponse(transcription, 'interviewer');
+    if (!interviewerResponse) {
+      return res.status(500).json({ error: 'Failed to generate interviewer response' });
+    }
+    conversationHistory.push({ role: 'assistant', content: interviewerResponse.text });
+
+    console.log('Generating guest response...');
+    const guestResponse = await generateAIResponse(interviewerResponse.text, 'guest');
+    if (!guestResponse) {
+      return res.status(500).json({ error: 'Failed to generate guest response' });
+    }
+    conversationHistory.push({ role: 'assistant', content: guestResponse.text });
+
+    currentRound++;
+
+    const response = {
+      success: true,
+      transcription,
+      responses: [
+        {
+          speaker: 'interviewer',
+          text: interviewerResponse.text,
+          audioFile: interviewerResponse.audioFile
+        },
+        {
+          speaker: 'guest',
+          text: guestResponse.text,
+          audioFile: guestResponse.audioFile
+        }
+      ],
+      round: currentRound,
+      isComplete: currentRound >= MAX_ROUNDS
+    };
+
+    console.log('Sending response:', response);
+    res.json(response);
+  } catch (error) {
+    console.error('Error processing recording:', error);
+    res.status(500).json({ error: 'Failed to process recording' });
+  }
+});
+
+app.post('/reset-conversation', (req, res) => {
+  conversationHistory = [];
+  currentRound = 0;
+  lastUserInput = '';
+  res.json({ success: true });
+});
+
+app.get('/conversation-status', (req, res) => {
+  res.json({
+    isActive: currentRound < MAX_ROUNDS,
+    currentRound,
+    totalRounds: MAX_ROUNDS,
+    isRecording: isCurrentlyRecording()
+  });
+});
+
+const PORT = process.env.PORT || 3001;
+const server = app.listen(PORT, async () => {
+  console.log(`Server is running on port ${PORT}`);
+});
