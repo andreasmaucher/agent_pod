@@ -26,7 +26,9 @@
     "ethers": "^6.13.4",
     "node-persist": "^4.0.3",
     "openai": "^4.73.1",
+    "play-sound": "^1.1.6",
     "rss-parser": "^3.13.0",
+    "sox": "^0.1.0",
     "starknet": "^6.11.0",
     "telegraf": "^4.16.3",
     "zod": "^3.23.8"

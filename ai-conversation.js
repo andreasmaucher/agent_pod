@@ -5,7 +5,6 @@ import dotenv from "dotenv";
 import { recordVoice } from "./voice-recorder.js";
 import { textToSpeech } from "./text-to-speech.js";
 import { SYSTEM_PROMPTS } from "./ai_personas/prompts.js";
-import { execAsync } from "./exec-async.js";
 
 dotenv.config();
 
@@ -145,15 +144,7 @@ async function getAIResponse(prompt, isAgent1 = true) {
   return message;
 }
 
-async function playAudio(audioPath) {
-  try {
-    await execAsync(`afplay ${audioPath}`);
-  } catch (error) {
-    console.error("Error playing audio:", error);
-  }
-}
-
-async function runConversation(rounds = 2) {
+async function runConversation(rounds = 10) {
   try {
     // Clean up any existing player input files
     const files = fs.readdirSync(".");
@@ -167,10 +158,6 @@ async function runConversation(rounds = 2) {
     console.log(
       "You can participate in the conversation between the host and the guest."
     );
-    console.log(
-      "After each response, you'll have a chance to speak your thoughts or questions."
-    );
-    console.log("Your inputs will be saved in the 'recordings' directory.");
 
     let currentPrompt =
       "Let's start by talking about your thoughts on the upcoming 2024 election. What makes you confident about Trump's chances?";
@@ -182,15 +169,11 @@ async function runConversation(rounds = 2) {
       const agent1Response = await getAIResponse(currentPrompt, true);
       const interviewer_audio = `./interviewer_round${i + 1}.mp3`;
       await textToSpeech(agent1Response, interviewer_audio, "onyx");
-      console.log("🔊 Playing interviewer's response...");
-      await playAudio(interviewer_audio);
 
       // Guest responds
       const agent2Response = await getAIResponse(agent1Response, false);
       const guest_audio = `./guest_round${i + 1}.mp3`;
       await textToSpeech(agent2Response, guest_audio, "shimmer");
-      console.log("🔊 Playing guest's response...");
-      await playAudio(guest_audio);
 
       // Get player's input
       console.log("\n🎤 Your turn! Share your thoughts or ask a question...");
