@@ -71,7 +71,7 @@ function App() {
 
   const handleAiResponse = (newResponses: AIResponse[]) => {
     setResponses((prev) => [...prev, ...newResponses]); // Append responses in sequence
-    setCurrentResponseIndex(0); // Reset to the first response
+    //setCurrentResponseIndex(0); // Reset to the first response
   };
 
   const playResponse = async (response: AIResponse) => {
