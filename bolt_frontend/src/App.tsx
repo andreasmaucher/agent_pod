@@ -75,24 +75,21 @@ function App() {
   };
 
   const playResponse = async (response: AIResponse) => {
-    if (!audioRef.current) return;
+    if (!audioRef.current) {
+      console.log("No audio element found for response");
+      return;
+    }
+    console.log("Playing response:", response);
 
     try {
-      // Ensure the response is valid and contains the audio file
-      if (!response.audioFile) {
-        console.error("No audio file found in response:", response);
-        return;
-      }
+      if (responses[currentResponseIndex] !== response) return;
 
       const audioUrl = `http://localhost:3001/${response.audioFile}`;
       const testAudio = new Audio(audioUrl);
 
       await new Promise((resolve, reject) => {
         testAudio.addEventListener("loadeddata", resolve);
-        testAudio.addEventListener("error", (e) => {
-          console.error("Error loading audio:", e);
-          reject(e);
-        });
+        testAudio.addEventListener("error", reject);
       });
 
       audioRef.current.src = audioUrl;
@@ -109,9 +106,9 @@ function App() {
 
   const handleAudioEnded = () => {
     setIsPlaying(false);
+    moveToNextResponse();
     if (currentResponseIndex < responses.length - 1) {
-      moveToNextResponse();
-      // setCurrentResponseIndex((prev) => prev + 1);
+      setCurrentResponseIndex((prev) => prev + 1);
     }
   };
 
