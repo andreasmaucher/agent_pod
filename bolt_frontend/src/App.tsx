@@ -106,9 +106,7 @@ function App() {
 
   const handleAudioEnded = () => {
     setIsPlaying(false);
-    // moveToNextResponse();
-    if (currentResponseIndex < responses.length - 1) {
-      // setCurrentResponseIndex((prev) => prev + 1);
+    if (currentResponseIndex < responses.length + 1) {
       moveToNextResponse();
     }
   };
@@ -119,7 +117,7 @@ function App() {
   };
 
   const moveToNextResponse = () => {
-    if (currentResponseIndex < responses.length) {
+    if (currentResponseIndex < responses.length + 1) {
       setCurrentResponseIndex((prev) => prev + 1);
     }
   };
