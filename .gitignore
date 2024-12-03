@@ -1,3 +1,4 @@
+# Environment
 .env
 
 # Dependencies
@@ -20,3 +21,6 @@ my_storage/
 # Cache
 frontend/.next/cache/webpack/server-production/
 frontend/.next/cache/webpack/client-production/*.env
+
+# Audio files
+audio/*
