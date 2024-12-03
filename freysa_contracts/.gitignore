@@ -1,3 +1,10 @@
+# Clear cache
+frontend/.next/cache/*
+frontend/.next/cache/
+
+# Next.js
+frontend/.next
+frontend/.next/
 
 # Environment variables
 .env
