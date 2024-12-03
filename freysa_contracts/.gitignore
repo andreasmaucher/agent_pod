@@ -1,3 +1,6 @@
+# Clear cache
+frontend/.next/cache/*
+
 # Environment variables
 .env
 .env.local
