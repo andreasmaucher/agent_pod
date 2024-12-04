@@ -113,20 +113,29 @@ async function generateAIResponse(userInput, speaker) {
     const aiResponse = completion.choices[0].message.content;
     console.log(`${speaker} response text:`, aiResponse);
 
-    // Generate audio for the response
-    console.log(`Generating audio for ${speaker}...`);
-    const audioResponse = await openai.audio.speech.create({
-      model: "tts-1",
-      voice: speaker === "interviewer" ? "onyx" : "echo",
-      input: aiResponse,
-    });
+    // TTS code block start
+    // Generate audio for the response in chunks
+    console.log(`Generating audio for ${speaker} in chunks...`);
+    const audioChunks = [];
+    const chunkSize = 100; // Define your chunk size based on your needs
+
+    for (let i = 0; i < aiResponse.length; i += chunkSize) {
+      const chunk = aiResponse.slice(i, i + chunkSize);
+      const mp3 = await openai.audio.speech.create({
+        model: "tts-1",
+        voice: speaker === "interviewer" ? "onyx" : "echo",
+        input: chunk,
+      });
+      const buffer = Buffer.from(await mp3.arrayBuffer());
+      audioChunks.push(buffer);
+    }
+
+    // Concatenate all chunks into a single buffer
+    const audioBuffer = Buffer.concat(audioChunks);
 
     // Save audio file
     const audioFileName = `${speaker}_response_${Date.now()}.mp3`;
     const audioPath = path.join(__dirname, "audio", audioFileName);
-
-    // Convert audio response to buffer and save
-    const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
     await fs.writeFile(audioPath, audioBuffer);
 
     console.log(`Audio saved to: ${audioPath}`);
