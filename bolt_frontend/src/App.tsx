@@ -71,6 +71,7 @@ function App() {
 
   const handleAiResponse = (newResponses: AIResponse[]) => {
     setResponses((prev) => [...prev, ...newResponses]); // Append responses in sequence
+    conversationStatus.currentRound++;
     //setCurrentResponseIndex(0); // Reset to the first response
   };
 
@@ -94,6 +95,7 @@ function App() {
 
       audioRef.current.src = audioUrl;
       await audioRef.current.play();
+      console.log("Audio played successfully");
     } catch (error) {
       console.error("Error playing audio:", error);
       moveToNextResponse();
@@ -143,7 +145,7 @@ function App() {
 
         <div className="mb-8 text-center">
           <p className="text-lg font-medium text-zinc-200">
-            Round {conversationStatus.currentRound + 1} of{" "}
+            Round {conversationStatus.currentRound} of{" "}
             {conversationStatus.totalRounds}
           </p>
 
