@@ -3,11 +3,11 @@ export interface ConversationStatus {
   currentRound: number;
   totalRounds: number;
   isRecording: boolean;
-  currentSpeaker: 'interviewer' | 'guest';
+  currentSpeaker: "interviewer" | "guest";
 }
 
 export interface AIResponse {
-  speaker: 'interviewer' | 'guest';
+  speaker: "interviewer" | "guest";
   text: string;
   audioFile: string;
 }
@@ -21,11 +21,11 @@ export interface ConversationResponse {
 }
 
 export class AiConversationService {
-  private readonly API_URL = 'http://localhost:3001';
+  private readonly API_URL = "http://localhost:3001";
   private currentRound = 0;
   private isConversationActive = false;
   private isRecording = false;
-  private currentSpeaker: 'interviewer' | 'guest' = 'interviewer'; // Start with interviewer
+  private currentSpeaker: "interviewer" | "guest" = "interviewer"; // Start with interviewer
 
   private readonly SYSTEM_PROMPTS = {
     interviewer: `You are Joe Rogan-style podcast host interviewing a Trump supporter. 
@@ -55,7 +55,7 @@ export class AiConversationService {
         Dont repeat yourself, or your ideas, explore new ideas, concepts and topics.
         Format of your response:
         No more that 1-2 sentences per interaction.
-        Speak with conviction, feel free to use strong language.You can use slang, curse words, etc.`
+        Speak with conviction, feel free to use strong language.You can use slang, curse words, etc.`,
   };
 
   constructor() {
@@ -64,32 +64,32 @@ export class AiConversationService {
   }
 
   private async initializeConversation() {
-    console.log('Initializing conversation...');
+    console.log("Initializing conversation...");
     await this.resetConversation();
   }
 
   async startConversation(): Promise<ConversationResponse> {
-    console.log('Starting conversation with speaker:', this.currentSpeaker);
+    console.log("Starting conversation with speaker:", this.currentSpeaker);
     try {
       const response = await fetch(`${this.API_URL}/start-conversation`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           speaker: this.currentSpeaker,
-          systemPrompt: this.SYSTEM_PROMPTS[this.currentSpeaker]
-        })
+          systemPrompt: this.SYSTEM_PROMPTS[this.currentSpeaker],
+        }),
       });
       const data = await response.json();
-      console.log('Start conversation response:', data);
+      console.log("Start conversation response:", data);
       if (data.success) {
         this.isConversationActive = true;
         // Don't switch speaker here, let the conversation flow naturally
       }
       return data;
     } catch (error) {
-      console.error('Failed to start conversation:', error);
+      console.error("Failed to start conversation:", error);
       return { success: false };
     }
   }
@@ -97,99 +97,105 @@ export class AiConversationService {
   async continueConversation(): Promise<ConversationResponse> {
     try {
       const response = await fetch(`${this.API_URL}/continue-conversation`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           speaker: this.currentSpeaker,
-          systemPrompt: this.SYSTEM_PROMPTS[this.currentSpeaker]
-        })
+          systemPrompt: this.SYSTEM_PROMPTS[this.currentSpeaker],
+        }),
       });
       const data = await response.json();
       if (data.success) {
         this.currentRound = data.round;
         this.isConversationActive = !data.isComplete;
         // Switch speakers after each successful interaction
-        this.currentSpeaker = this.currentSpeaker === 'interviewer' ? 'guest' : 'interviewer';
+        this.currentSpeaker =
+          this.currentSpeaker === "interviewer" ? "guest" : "interviewer";
       }
       return data;
     } catch (error) {
-      console.error('Failed to continue conversation:', error);
+      console.error("Failed to continue conversation:", error);
       return { success: false };
     }
   }
 
   async startRecording(): Promise<boolean> {
-    console.log('Starting recording...');
+    console.log("Starting recording...");
     if (!this.isConversationActive) {
-      console.log('Conversation not active, initializing...');
+      console.log("Conversation not active, initializing...");
       await this.initializeConversation();
     }
 
     try {
       const response = await fetch(`${this.API_URL}/start-recording`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
-        }
+          "Content-Type": "application/json",
+        },
       });
       const data = await response.json();
-      console.log('Start recording response:', data);
+      console.log("Start recording response:", data);
       if (data.success) {
         this.isRecording = true;
       }
       return data.success;
     } catch (error) {
-      console.error('Failed to start recording:', error);
+      console.error("Failed to start recording:", error);
       return false;
     }
   }
 
   async stopRecording(): Promise<ConversationResponse> {
-    console.log('Stopping recording...');
+    console.log("Stopping recording...");
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
       const response = await fetch(`${this.API_URL}/stop-recording`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
-        }
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
       const data = await response.json();
-      console.log('Stop recording response:', data);
+
       if (data.success) {
         this.currentRound = data.round;
         this.isConversationActive = !data.isComplete;
         this.isRecording = false;
-        // Update speaker after successful recording
-        this.currentSpeaker = 'interviewer';
+        this.currentSpeaker = "interviewer";
       }
       return data;
     } catch (error) {
-      console.error('Failed to stop recording:', error);
+      console.error("Failed to stop recording:", error);
       return { success: false };
     }
   }
 
   async resetConversation(): Promise<boolean> {
-    console.log('Resetting conversation...');
+    console.log("Resetting conversation...");
     try {
       const response = await fetch(`${this.API_URL}/reset-conversation`, {
-        method: 'POST'
+        method: "POST",
       });
       const data = await response.json();
-      console.log('Reset conversation response:', data);
+      console.log("Reset conversation response:", data);
       if (data.success) {
         this.currentRound = 0;
         this.isConversationActive = true;
         this.isRecording = false;
-        this.currentSpeaker = 'interviewer';
+        this.currentSpeaker = "interviewer";
         // Start the conversation with the interviewer
         await this.startConversation();
       }
       return data.success;
     } catch (error) {
-      console.error('Failed to reset conversation:', error);
+      console.error("Failed to reset conversation:", error);
       return false;
     }
   }
@@ -198,22 +204,22 @@ export class AiConversationService {
     try {
       const response = await fetch(`${this.API_URL}/conversation-status`);
       const data = await response.json();
-      console.log('Get conversation status response:', data);
+      console.log("Get conversation status response:", data);
       this.currentRound = data.currentRound;
       this.isConversationActive = data.isActive;
       this.isRecording = data.isRecording;
       return {
         ...data,
-        currentSpeaker: this.currentSpeaker
+        currentSpeaker: this.currentSpeaker,
       };
     } catch (error) {
-      console.error('Failed to get conversation status:', error);
+      console.error("Failed to get conversation status:", error);
       return {
         isActive: this.isConversationActive,
         currentRound: this.currentRound,
         totalRounds: 20,
         isRecording: this.isRecording,
-        currentSpeaker: this.currentSpeaker
+        currentSpeaker: this.currentSpeaker,
       };
     }
   }
@@ -222,7 +228,7 @@ export class AiConversationService {
     return this.isRecording;
   }
 
-  getCurrentSpeaker(): 'interviewer' | 'guest' {
+  getCurrentSpeaker(): "interviewer" | "guest" {
     return this.currentSpeaker;
   }
 }

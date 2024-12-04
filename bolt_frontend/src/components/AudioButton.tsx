@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { AiConversationService } from '../utils/aiConversationService';
+import React, { useState, useRef, useCallback } from "react";
+import { AiConversationService } from "../utils/aiConversationService";
 
 interface AudioButtonProps {
   isPlaying: boolean;
@@ -8,38 +8,51 @@ interface AudioButtonProps {
   onTranscription: (text: string) => void;
 }
 
-export function AudioButton({ isPlaying, audioElement, onAiResponse, onTranscription }: AudioButtonProps) {
+export function AudioButton({
+  isPlaying,
+  audioElement,
+  onAiResponse,
+  onTranscription,
+}: AudioButtonProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const aiService = useRef(new AiConversationService()).current;
 
   const startRecording = useCallback(async () => {
     if (isPlaying || isProcessing || isRecording) return;
-    
-    console.log('Starting recording...');
+
+    console.log("Starting recording...");
     setIsRecording(true);
-    
+
     try {
       const success = await aiService.startRecording();
       if (!success) {
-        console.error('Failed to start recording');
+        console.error("Failed to start recording");
         setIsRecording(false);
       }
     } catch (error) {
-      console.error('Error starting recording:', error);
+      console.error("Error starting recording:", error);
       setIsRecording(false);
     }
   }, [isPlaying, isProcessing, isRecording]);
 
   const stopRecording = useCallback(async () => {
     if (!isRecording) return;
-    
-    console.log('Stopping recording...');
+
+    console.log("Stopping recording...");
     setIsRecording(false);
     setIsProcessing(true);
-    
+
     try {
-      const result = await aiService.stopRecording();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Processing timeout")), 10000)
+      );
+
+      const result = await Promise.race([
+        aiService.stopRecording(),
+        timeoutPromise,
+      ]);
+
       if (result.success) {
         if (result.transcription) {
           onTranscription(result.transcription);
@@ -48,10 +61,10 @@ export function AudioButton({ isPlaying, audioElement, onAiResponse, onTranscrip
           onAiResponse(result.responses);
         }
       } else {
-        console.error('Failed to process recording');
+        console.error("Failed to process recording");
       }
     } catch (error) {
-      console.error('Error processing recording:', error);
+      console.error("Error processing recording:", error);
     } finally {
       setIsProcessing(false);
     }
@@ -78,17 +91,17 @@ export function AudioButton({ isPlaying, audioElement, onAiResponse, onTranscrip
   };
 
   const getButtonStyle = () => {
-    if (isProcessing) return 'bg-yellow-500';
-    if (isPlaying) return 'bg-green-500';
-    if (isRecording) return 'bg-red-500 scale-110';
-    return 'bg-blue-500 hover:bg-blue-600';
+    if (isProcessing) return "bg-yellow-500";
+    if (isPlaying) return "bg-green-500";
+    if (isRecording) return "bg-red-500 scale-110";
+    return "bg-blue-500 hover:bg-blue-600";
   };
 
   const getButtonText = () => {
-    if (isProcessing) return 'Processing...';
-    if (isPlaying) return 'Playing...';
-    if (isRecording) return 'Recording...';
-    return 'Hold to Record';
+    if (isProcessing) return "Processing...";
+    if (isPlaying) return "Playing...";
+    if (isRecording) return "Recording...";
+    return "Hold to Record";
   };
 
   return (
@@ -106,9 +119,7 @@ export function AudioButton({ isPlaying, audioElement, onAiResponse, onTranscrip
       onTouchCancel={handleTouchEnd}
       disabled={isPlaying || isProcessing}
     >
-      <span className="pointer-events-none">
-        {getButtonText()}
-      </span>
+      <span className="pointer-events-none">{getButtonText()}</span>
     </button>
   );
 }

@@ -12,6 +12,7 @@ import {
 } from "./voice-recorder.js";
 import dotenv from "dotenv";
 import { createRequire } from "module";
+import { createServer } from "http";
 
 const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
@@ -275,6 +276,28 @@ app.get("/conversation-status", (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-const server = app.listen(PORT, async () => {
+const server = createServer(app);
+server.on("error", (e) => {
+  if (e.code === "EADDRINUSE") {
+    console.log("Port in use, forcing shutdown...");
+    // Force kill any process using the port
+    require("child_process").exec(
+      `lsof -i :${PORT} | grep LISTEN | awk '{print $2}' | xargs kill -9`
+    );
+    // Wait a moment and try again
+    setTimeout(() => {
+      server.listen(PORT);
+    }, 1000);
+  }
+});
+
+server.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
+});
+
+process.on("SIGTERM", () => {
+  server.close(() => {
+    console.log("Server shutdown complete");
+    process.exit(0);
+  });
 });

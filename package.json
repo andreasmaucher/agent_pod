@@ -7,7 +7,8 @@
   "scripts": {
     "start": "NODE_OPTIONS='--loader ts-node/esm --no-warnings' node agent.ts",
     "dev": "cross-env DEV=true NODE_OPTIONS='--loader ts-node/esm --no-warnings' node agent.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "restart": "lsof -ti :3001 | xargs kill -9 && node ai-conversation.js"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
