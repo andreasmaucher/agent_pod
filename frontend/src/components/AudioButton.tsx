@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from "react";
 import { AiConversationService } from "../utils/aiConversationService";
+import { AudioRecorder } from '../utils/audioRecorder';
 
 interface AudioButtonProps {
   isPlaying: boolean;
@@ -16,22 +17,18 @@ export function AudioButton({
 }: AudioButtonProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const audioRecorder = useRef<AudioRecorder>(new AudioRecorder());
   const aiService = useRef(new AiConversationService()).current;
 
   const startRecording = useCallback(async () => {
     if (isPlaying || isProcessing || isRecording) return;
 
-    console.log("Starting recording...");
-    setIsRecording(true);
-
     try {
-      const success = await aiService.startRecording();
-      if (!success) {
-        console.error("Failed to start recording");
-        setIsRecording(false);
-      }
+      await audioRecorder.current.initialize();
+      audioRecorder.current.startRecording();
+      setIsRecording(true);
     } catch (error) {
-      console.error("Error starting recording:", error);
+      console.error('Error starting recording:', error);
       setIsRecording(false);
     }
   }, [isPlaying, isProcessing, isRecording]);
@@ -39,19 +36,12 @@ export function AudioButton({
   const stopRecording = useCallback(async () => {
     if (!isRecording) return;
 
-    console.log("Stopping recording...");
     setIsRecording(false);
     setIsProcessing(true);
 
     try {
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Processing timeout")), 10000)
-      );
-
-      const result = await Promise.race([
-        aiService.stopRecording(),
-        timeoutPromise,
-      ]);
+      const audioBlob = await audioRecorder.current.stopRecording();
+      const result = await aiService.processAudioRecording(audioBlob);
 
       if (result.success) {
         if (result.transcription) {
@@ -60,13 +50,12 @@ export function AudioButton({
         if (result.responses) {
           onAiResponse(result.responses);
         }
-      } else {
-        console.error("Failed to process recording");
       }
     } catch (error) {
-      console.error("Error processing recording:", error);
+      console.error('Error processing recording:', error);
     } finally {
       setIsProcessing(false);
+      audioRecorder.current.cleanup();
     }
   }, [isRecording, onAiResponse, onTranscription]);
 

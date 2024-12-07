@@ -5,14 +5,18 @@ import { fileURLToPath } from "url";
 import { dirname } from "path";
 import fs from "fs/promises";
 import OpenAI from "openai";
-import {
-  startRecording,
-  stopRecording,
-  isCurrentlyRecording,
-} from "./util/voice-recorder.js";
 import dotenv from "dotenv";
 import { PERSONAS } from "./ai_personas/index.js";
 import type { ChatCompletionMessageParam } from "openai/resources/index.mjs";
+import fileUpload from 'express-fileupload';
+
+declare global {
+  namespace Express {
+    interface Request {
+      files?: fileUpload.FileArray | null;
+    }
+  }
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,6 +26,7 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(fileUpload());
 
 // Create audio directory if it doesn't exist
 const audioDir = path.join(__dirname, "audio");
@@ -139,43 +144,28 @@ async function generateAIResponse(userInput: string, speaker: string) {
   }
 }
 
-// TODO: FIX THIS - recording needs to happen on FE
-app.post("/start-recording", async (req, res) => {
-  if (isCurrentlyRecording()) {
-    res.status(400).json({ error: "Already recording" });
-    return;
-  }
-
-  const recordingPath = path.join(
-    __dirname,
-    "audio",
-    `user_recording_${Date.now()}.mp3`
-  );
-  const success = await startRecording(recordingPath);
-
-  if (success) {
-    res.json({ success: true });
-  } else {
-    res.status(500).json({ error: "Failed to start recording" });
-  }
-});
-
-app.post("/stop-recording", async (req, res) => {
-  if (!isCurrentlyRecording()) {
-    res.status(400).json({ error: "Not recording" });
-    return;
-  }
-
+app.post("/process-audio", async (req, res) => {
   try {
-    console.log("Stopping recording...");
-    const recordingPath = await stopRecording();
-    if (!recordingPath) {
-      res.status(500).json({ error: "Failed to stop recording" });
+    if (!req.files || !req.files.audio) {
+      res.status(400).json({ error: "No audio file uploaded" });
       return;
     }
 
+    const audioFile = Array.isArray(req.files.audio) 
+      ? req.files.audio[0] 
+      : req.files.audio;
+    const audioPath = path.join(__dirname, "audio", `user_recording_${Date.now()}.mp3`);
+    
+    if(!audioFile) {
+      res.status(400).json({ error: "No audio file uploaded" });
+      return;
+    }
+    
+    // Save uploaded file
+    await audioFile.mv(audioPath);
+
     console.log("Transcribing audio...");
-    const transcription = await transcribeAudio(recordingPath);
+    const transcription = await transcribeAudio(audioPath);
     if (!transcription) {
       res.status(500).json({ error: "Failed to transcribe recording" });
       return;
@@ -237,8 +227,8 @@ app.post("/stop-recording", async (req, res) => {
     console.log("Sending response:", response);
     res.json(response);
   } catch (error) {
-    console.error("Error processing recording:", error);
-    res.status(500).json({ error: "Failed to process recording" });
+    console.error("Error processing audio:", error);
+    res.status(500).json({ error: "Failed to process audio" });
   }
 });
 
@@ -254,7 +244,7 @@ app.get("/conversation-status", (req, res) => {
     isActive: currentRound < MAX_ROUNDS,
     currentRound,
     totalRounds: MAX_ROUNDS,
-    isRecording: isCurrentlyRecording(),
+    isRecording: false,
   });
 });
 

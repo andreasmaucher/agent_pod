@@ -21,7 +21,7 @@ export interface ConversationResponse {
 }
 
 export class AiConversationService {
-  private readonly API_URL = "http://localhost:3001";
+  private readonly API_URL = "http://localhost:3002";
   private currentRound = 0;
   private isConversationActive = false;
   private isRecording = false;
@@ -121,58 +121,26 @@ export class AiConversationService {
     }
   }
 
-  async startRecording(): Promise<boolean> {
-    console.log("Starting recording...");
-    if (!this.isConversationActive) {
-      console.log("Conversation not active, initializing...");
-      await this.initializeConversation();
-    }
+  async processAudioRecording(audioBlob: Blob): Promise<ConversationResponse> {
+    const formData = new FormData();
+    formData.append('audio', audioBlob);
 
     try {
-      const response = await fetch(`${this.API_URL}/start-recording`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const data = await response.json();
-      console.log("Start recording response:", data);
-      if (data.success) {
-        this.isRecording = true;
-      }
-      return data.success;
-    } catch (error) {
-      console.error("Failed to start recording:", error);
-      return false;
-    }
-  }
-
-  async stopRecording(): Promise<ConversationResponse> {
-    console.log("Stopping recording...");
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
-      const response = await fetch(`${this.API_URL}/stop-recording`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
+      const response = await fetch(`${this.API_URL}/process-audio`, {
+        method: 'POST',
+        body: formData
       });
 
-      clearTimeout(timeoutId);
       const data = await response.json();
-
+      
       if (data.success) {
         this.currentRound = data.round;
         this.isConversationActive = !data.isComplete;
-        this.isRecording = false;
-        this.currentSpeaker = "interviewer";
       }
+      console.log("Processing audio recording response:", data);
       return data;
     } catch (error) {
-      console.error("Failed to stop recording:", error);
+      console.error('Failed to process audio recording:', error);
       return { success: false };
     }
   }

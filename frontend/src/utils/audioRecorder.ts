@@ -1,38 +1,61 @@
 export class AudioRecorder {
-  private audioContext: AudioContext | null = null;
-  private analyzer: AnalyserNode | null = null;
-  private mediaStream: MediaStream | null = null;
-  private source: MediaStreamAudioSourceNode | null = null;
   private mediaRecorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
+  private stream: MediaStream | null = null;
+  private analyzer: AnalyserNode | null = null;
+  private audioContext: AudioContext | null = null;
 
   async initialize(): Promise<void> {
-    this.audioContext = new AudioContext();
-    this.analyzer = this.audioContext.createAnalyser();
-    this.analyzer.fftSize = 32;
-    
     try {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
-      this.source.connect(this.analyzer);
-      
-      this.mediaRecorder = new MediaRecorder(this.mediaStream);
-      this.chunks = [];
-      
-      this.mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          this.chunks.push(e.data);
-        }
-      };
-      
-      this.mediaRecorder.start();
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.audioContext = new AudioContext();
+      this.analyzer = this.audioContext.createAnalyser();
+      this.analyzer.fftSize = 32;
+
+      const source = this.audioContext.createMediaStreamSource(this.stream);
+      source.connect(this.analyzer);
+
+      this.mediaRecorder = new MediaRecorder(this.stream);
+      this.setupMediaRecorder();
     } catch (error) {
-      console.error('Error accessing microphone:', error);
+      console.error('Error initializing audio recorder:', error);
       throw error;
     }
   }
 
-  getAudioData(): number {
+  private setupMediaRecorder(): void {
+    if (!this.mediaRecorder) return;
+
+    this.mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        this.chunks.push(event.data);
+      }
+    };
+  }
+
+  startRecording(): void {
+    this.chunks = [];
+    this.mediaRecorder?.start();
+  }
+
+  async stopRecording(): Promise<Blob> {
+    return new Promise((resolve) => {
+      if (!this.mediaRecorder) {
+        resolve(new Blob());
+        return;
+      }
+
+      this.mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(this.chunks, { type: 'audio/webm' });
+        this.chunks = [];
+        resolve(audioBlob);
+      };
+
+      this.mediaRecorder.stop();
+    });
+  }
+
+  getAudioLevel(): number {
     if (!this.analyzer) return 0;
     
     const dataArray = new Uint8Array(this.analyzer.frequencyBinCount);
@@ -42,24 +65,10 @@ export class AudioRecorder {
     return average / 255;
   }
 
-  async stop(): Promise<Blob> {
-    return new Promise((resolve) => {
-      if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-        this.mediaRecorder.onstop = () => {
-          const blob = new Blob(this.chunks, { type: 'audio/webm' });
-          this.chunks = [];
-          resolve(blob);
-        };
-        this.mediaRecorder.stop();
-      } else {
-        resolve(new Blob());
-      }
-    });
-  }
-
   cleanup(): void {
-    this.mediaStream?.getTracks().forEach(track => track.stop());
-    this.source?.disconnect();
+    this.stream?.getTracks().forEach(track => track.stop());
     this.audioContext?.close();
+    this.mediaRecorder = null;
+    this.chunks = [];
   }
 }
