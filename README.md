@@ -15,3 +15,15 @@ Contributions are welcome! Please:
 Fork the repository
 Create a feature branch
 Submit a pull request
+
+
+### Commands
+
+```bash
+npm install:all
+
+npm run start
+# or
+npm run start:frontend
+npm run start:backend
+```

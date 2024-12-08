@@ -1,0 +1,32 @@
+{
+  "type": "module",
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "start": "tsx ai-conversation.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "restart": "lsof -ti :3001 | xargs kill -9 && tsx ai-conversation.ts"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/express-fileupload": "^1.5.1",
+    "@types/node": "^22.9.0",
+    "@types/node-persist": "^3.1.8",
+    "cross-env": "^7.0.3",
+    "tsx": "^4.7.1",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-fileupload": "^1.5.1",
+    "keypress": "^0.2.1",
+    "node-persist": "^4.0.3",
+    "openai": "^4.76.0",
+    "play-sound": "^1.1.6",
+    "sox": "^0.1.0"
+  }
+}

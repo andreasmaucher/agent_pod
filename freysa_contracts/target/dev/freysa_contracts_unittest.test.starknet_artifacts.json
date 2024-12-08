@@ -1,1 +1,0 @@
-{"version":1,"contracts":[{"id":"nu4nrfbnbv4h0","package_name":"freysa_contracts","contract_name":"SimpleVault","module_path":"freysa_contracts::main_contract::SimpleVault","artifacts":{"sierra":"freysa_contracts_unittest_SimpleVault.test.contract_class.json","casm":null}}]}
