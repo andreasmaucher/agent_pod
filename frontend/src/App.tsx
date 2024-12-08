@@ -18,11 +18,11 @@ function App() {
     totalRounds: number;
   }>({ currentRound: 0, totalRounds: 20 });
 
-  const audioRef = useRef<HTMLAudioElement>(new Audio());
+  const audioRef = useRef<HTMLAudioElement>(null);
   const aiService = useRef(new AiConversationService());
 
   useEffect(() => {
-    aiService.current.resetConversation();
+    handleResetConversation();
   }, []);
 
   useEffect(() => {
@@ -33,8 +33,21 @@ function App() {
   }, [currentResponseIndex, responses]);
 
   const playResponse = async (response: AIResponse) => {
+    if (!audioRef.current) {
+      console.log("No audio element found for response");
+      return;
+    }
+    console.log("Playing response:", response);
+
     try {
       const audioUrl = `${API_URL}/${response.audioFile}`;
+      const testAudio = new Audio(audioUrl);
+
+      await new Promise((resolve, reject) => {
+        testAudio.addEventListener("loadeddata", resolve);
+        testAudio.addEventListener("error", reject);
+      });
+
       audioRef.current.src = audioUrl;
       
       audioRef.current.onplay = () => setIsPlaying(true);
@@ -69,8 +82,10 @@ function App() {
         ...prev,
         currentRound: 0,
       }));
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
     }
   };
 
@@ -84,6 +99,10 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-zinc-900 to-black">
+      <audio
+        ref={audioRef}
+        className="hidden"
+      />
       <div className="absolute top-6 right-6">
         <WalletButton />
       </div>
@@ -107,7 +126,7 @@ function App() {
           )}
 
           {responses.map((response, index) => (
-            <div key={index} style={getSpeakerStyle(response.speaker, index)}>
+            <div key={index} className="mt-4" style={getSpeakerStyle(response.speaker, index)}>
               <p className="text-sm font-medium">
                 {getSpeakerName(response.speaker)}:
               </p>
