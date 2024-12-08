@@ -4,14 +4,12 @@ import { AudioRecorder } from '../utils/audioRecorder';
 
 interface AudioButtonProps {
   isPlaying: boolean;
-  audioElement?: HTMLAudioElement;
   onAiResponse: (responses: any[]) => void;
   onTranscription: (text: string) => void;
 }
 
 export function AudioButton({
   isPlaying,
-  audioElement,
   onAiResponse,
   onTranscription,
 }: AudioButtonProps) {
@@ -44,12 +42,8 @@ export function AudioButton({
       const result = await aiService.processAudioRecording(audioBlob);
 
       if (result.success) {
-        if (result.transcription) {
-          onTranscription(result.transcription);
-        }
-        if (result.responses) {
-          onAiResponse(result.responses);
-        }
+        result.transcription && onTranscription(result.transcription);
+        result.responses && onAiResponse(result.responses);
       }
     } catch (error) {
       console.error('Error processing recording:', error);
@@ -59,56 +53,31 @@ export function AudioButton({
     }
   }, [isRecording, onAiResponse, onTranscription]);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    startRecording();
-  };
+  const buttonStyle = isProcessing ? "bg-yellow-500" : 
+                     isPlaying ? "bg-green-500" : 
+                     isRecording ? "bg-red-500 scale-110" : 
+                     "bg-blue-500 hover:bg-blue-600";
 
-  const handleMouseUp = (e: React.MouseEvent) => {
-    e.preventDefault();
-    stopRecording();
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    e.preventDefault();
-    startRecording();
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    e.preventDefault();
-    stopRecording();
-  };
-
-  const getButtonStyle = () => {
-    if (isProcessing) return "bg-yellow-500";
-    if (isPlaying) return "bg-green-500";
-    if (isRecording) return "bg-red-500 scale-110";
-    return "bg-blue-500 hover:bg-blue-600";
-  };
-
-  const getButtonText = () => {
-    if (isProcessing) return "Processing...";
-    if (isPlaying) return "Playing...";
-    if (isRecording) return "Recording...";
-    return "Hold to Record";
-  };
+  const buttonText = isProcessing ? "Processing..." : 
+                    isPlaying ? "Playing..." : 
+                    isRecording ? "Recording..." : 
+                    "Hold to Record";
 
   return (
     <button
-      className={`w-32 h-32 rounded-full ${getButtonStyle()} text-white font-bold 
+      className={`w-32 h-32 rounded-full ${buttonStyle} text-white font-bold 
         transition-all duration-200 transform 
         flex items-center justify-center text-center px-4
         disabled:opacity-50 disabled:cursor-not-allowed
         select-none cursor-pointer active:scale-95`}
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
+      onMouseDown={startRecording}
+      onMouseUp={stopRecording}
+      onMouseLeave={stopRecording}
+      onTouchStart={startRecording}
+      onTouchEnd={stopRecording}
       disabled={isPlaying || isProcessing}
     >
-      <span className="pointer-events-none">{getButtonText()}</span>
+      <span className="pointer-events-none">{buttonText}</span>
     </button>
   );
 }

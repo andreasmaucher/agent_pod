@@ -6,6 +6,7 @@ import {
   AiConversationService,
   AIResponse,
 } from "./utils/aiConversationService";
+import { API_URL } from "./constants";
 
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -17,31 +18,11 @@ function App() {
     totalRounds: number;
   }>({ currentRound: 0, totalRounds: 20 });
 
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const aiServiceRef = useRef<AiConversationService>(
-    new AiConversationService()
-  );
+  const audioRef = useRef<HTMLAudioElement>(new Audio());
+  const aiService = useRef(new AiConversationService());
 
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.addEventListener("play", () => setIsPlaying(true));
-      audioRef.current.addEventListener("pause", () => setIsPlaying(false));
-      audioRef.current.addEventListener("ended", handleAudioEnded);
-      audioRef.current.addEventListener("error", handleAudioError);
-    }
-
-    handleResetConversation();
-
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.removeEventListener("play", () => setIsPlaying(true));
-        audioRef.current.removeEventListener("pause", () =>
-          setIsPlaying(false)
-        );
-        audioRef.current.removeEventListener("ended", handleAudioEnded);
-        audioRef.current.removeEventListener("error", handleAudioError);
-      }
-    };
+    aiService.current.resetConversation();
   }, []);
 
   useEffect(() => {
@@ -51,91 +32,58 @@ function App() {
     }
   }, [currentResponseIndex, responses]);
 
-  const handleResetConversation = async () => {
-    const success = await aiServiceRef.current.resetConversation();
-    if (success) {
-      const status = await aiServiceRef.current.getConversationStatus();
-      setConversationStatus({
-        currentRound: status.currentRound,
-        totalRounds: status.totalRounds,
-      });
-      setTranscription("");
-      setResponses([]);
-      setCurrentResponseIndex(0);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
+  const playResponse = async (response: AIResponse) => {
+    try {
+      const audioUrl = `${API_URL}/${response.audioFile}`;
+      audioRef.current.src = audioUrl;
+      
+      audioRef.current.onplay = () => setIsPlaying(true);
+      audioRef.current.onpause = () => setIsPlaying(false);
+      audioRef.current.onended = () => {
+        setIsPlaying(false);
+        setCurrentResponseIndex(prev => prev + 1);
+      };
+
+      await audioRef.current.play();
+    } catch (error) {
+      console.error("Error playing audio:", error);
+      setCurrentResponseIndex(prev => prev + 1);
     }
   };
 
   const handleAiResponse = (newResponses: AIResponse[]) => {
-    setResponses((prev) => [...prev, ...newResponses]); // Append responses in sequence
-    conversationStatus.currentRound++;
-    //setCurrentResponseIndex(0); // Reset to the first response
+    setResponses(prev => [...prev, ...newResponses]);
+    setConversationStatus(prev => ({
+      ...prev,
+      currentRound: prev.currentRound + 1,
+    }));
   };
 
-  const playResponse = async (response: AIResponse) => {
-    if (!audioRef.current) {
-      console.log("No audio element found for response");
-      return;
-    }
-    console.log("Playing response:", response);
-
-    try {
-      if (responses[currentResponseIndex] !== response) return;
-
-      const audioUrl = `http://localhost:3001/${response.audioFile}`;
-      const testAudio = new Audio(audioUrl);
-
-      await new Promise((resolve, reject) => {
-        testAudio.addEventListener("loadeddata", resolve);
-        testAudio.addEventListener("error", reject);
-      });
-
-      audioRef.current.src = audioUrl;
-      await audioRef.current.play();
-      console.log("Audio played successfully");
-    } catch (error) {
-      console.error("Error playing audio:", error);
-      moveToNextResponse();
+  const handleResetConversation = async () => {
+    const success = await aiService.current.resetConversation();
+    if (success) {
+      setTranscription("");
+      setResponses([]);
+      setCurrentResponseIndex(0);
+      setConversationStatus(prev => ({
+        ...prev,
+        currentRound: 0,
+      }));
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
     }
   };
 
-  const handleTranscription = (text: string) => {
-    setTranscription(text);
-  };
+  const getSpeakerStyle = (speaker: "interviewer" | "guest", index: number) => ({
+    opacity: index === currentResponseIndex ? "100" : "50",
+    color: speaker === "interviewer" ? "#60A5FA" : "#F87171"
+  });
 
-  const handleAudioEnded = () => {
-    setIsPlaying(false);
-    if (currentResponseIndex < responses.length + 1) {
-      moveToNextResponse();
-    }
-  };
-
-  const handleAudioError = () => {
-    console.error("Audio playback error occurred");
-    moveToNextResponse();
-  };
-
-  const moveToNextResponse = () => {
-    if (currentResponseIndex < responses.length + 1) {
-      setCurrentResponseIndex((prev) => prev + 1);
-    }
-  };
-
-  const getSpeakerColor = (speaker: "interviewer" | "guest") => {
-    return speaker === "interviewer" ? "text-blue-400" : "text-red-400";
-  };
-
-  const getSpeakerName = (speaker: "interviewer" | "guest") => {
-    return speaker === "interviewer" ? "Joe Rogan" : "Trump Supporter";
-  };
+  const getSpeakerName = (speaker: "interviewer" | "guest") => 
+    speaker === "interviewer" ? "Joe Rogan" : "Trump Supporter";
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-zinc-900 to-black">
-      <audio ref={audioRef} className="hidden" />
-
       <div className="absolute top-6 right-6">
         <WalletButton />
       </div>
@@ -159,17 +107,8 @@ function App() {
           )}
 
           {responses.map((response, index) => (
-            <div
-              key={index}
-              className={`mt-4 ${
-                index === currentResponseIndex ? "opacity-100" : "opacity-50"
-              }`}
-            >
-              <p
-                className={`text-sm font-medium ${getSpeakerColor(
-                  response.speaker
-                )}`}
-              >
+            <div key={index} style={getSpeakerStyle(response.speaker, index)}>
+              <p className="text-sm font-medium">
                 {getSpeakerName(response.speaker)}:
               </p>
               <p className="text-sm text-zinc-400 max-w-md">
@@ -181,9 +120,8 @@ function App() {
 
         <AudioButton
           isPlaying={isPlaying}
-          audioElement={audioRef.current ?? undefined}
           onAiResponse={handleAiResponse}
-          onTranscription={handleTranscription}
+          onTranscription={setTranscription}
         />
 
         <p className="mt-8 text-sm font-medium text-zinc-400">
